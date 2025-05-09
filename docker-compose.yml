@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Servicio de la aplicación RAG
+  rag_app:
+    build:
+      context: .  # Busca el Dockerfile en el directorio actual
+      dockerfile: Dockerfile
+    container_name: rag_chatbot_app
+    # Monta el script directamente para desarrollo, si quieres ver cambios sin reconstruir.
+    # Para producción, la copia en el Dockerfile es suficiente.
+    # volumes:
+    #   - ./app.py:/app/app.py 
+    volumes:
+      # Monta el directorio local 'models' al directorio '/app/models' dentro del contenedor
+      # DEBES colocar tu archivo .gguf en la carpeta 'models' de tu proyecto local.
+      - ./models:/app/models 
+      # Monta el directorio local 'faiss_data' para persistir el índice FAISS
+      - ./faiss_data:/app/faiss_index_data
+    environment:
+      # Puedes definir variables de entorno aquí si adaptas tu script app.py para usarlas
+      # Por ejemplo, para la ruta del modelo o configuración de la DB.
+      # MODEL_PATH: /app/models/tu_modelo.gguf
+      # DB_HOST: postgres 
+      # PYTHONUNBUFFERED: 1 # Equivalente a -u en CMD, para logs inmediatos
+      # HUGGING_FACE_HUB_TOKEN: "tu_token_si_es_necesario_para_modelos_privados" # Opcional
+    depends_on:
+      - postgres_db # Asegura que el servicio de la base de datos inicie antes que la app
+    networks:
+      - rag_network
+    # Si tu modelo LlamaCpp o embeddings requieren mucha RAM/CPU,
+    # podrías necesitar ajustar los recursos de Docker Desktop si se queda sin recursos.
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 4G
+
+  # Servicio de la base de datos PostgreSQL
+  postgres_db:
+    image: postgres:15 # Usa una versión específica de PostgreSQL
+    container_name: rag_postgres_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-raguser} # Puedes definir estas variables en un archivo .env o usar los defaults
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+    volumes:
+      # Persiste los datos de PostgreSQL en el directorio local 'pg_data'
+      - ./pg_data:/var/lib/postgresql/data
+    ports:
+      # Opcional: Mapea el puerto de PostgreSQL al host si necesitas acceder directamente desde fuera de Docker
+      # Formato: "HOST_PORT:CONTAINER_PORT"
+      - "5433:5432" # Accederías en localhost:5433
+    networks:
+      - rag_network
+    restart: unless-stopped
+
+# Define la red para la comunicación entre servicios
+networks:
+  rag_network:
+    driver: bridge
+
+# Define volúmenes nombrados si prefieres gestionarlos directamente por Docker
+# en lugar de bind mounts a directorios locales (pg_data es un bind mount arriba)
+# volumes:
+#   postgres_data_volume:
+#   faiss_index_volume:
