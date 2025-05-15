@@ -5,6 +5,7 @@ psycopg2-binary
 sentence-transformers
 faiss-cpu
 torch
+llama-cpp-python
 # Si planeas usar GPU con FAISS, podrías cambiar faiss-cpu por faiss-gpu
 # y asegurarte de que tu imagen base de Docker y tu sistema anfitrión lo soporten.
 # faiss-gpu

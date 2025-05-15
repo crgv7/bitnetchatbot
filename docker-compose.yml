@@ -10,19 +10,20 @@ services:
     # Monta el script directamente para desarrollo, si quieres ver cambios sin reconstruir.
     # Para producción, la copia en el Dockerfile es suficiente.
     # volumes:
-    #   - ./app.py:/app/app.py 
+    #   - ./app.py:/app/app.py
     volumes:
+      - ./rag.py:/app/rag.py
       # Monta el directorio local 'models' al directorio '/app/models' dentro del contenedor
       # DEBES colocar tu archivo .gguf en la carpeta 'models' de tu proyecto local.
-      - ./models:/app/models 
+      - ./model:/app/models
       # Monta el directorio local 'faiss_data' para persistir el índice FAISS
       - ./faiss_data:/app/faiss_index_data
     environment:
       # Puedes definir variables de entorno aquí si adaptas tu script app.py para usarlas
       # Por ejemplo, para la ruta del modelo o configuración de la DB.
       # MODEL_PATH: /app/models/tu_modelo.gguf
-      # DB_HOST: postgres 
-      # PYTHONUNBUFFERED: 1 # Equivalente a -u en CMD, para logs inmediatos
+      # DB_HOST: postgres
+      PYTHONUNBUFFERED: 1 # Equivalente a -u en CMD, para logs inmediatos. ESTA LÍNEA HA SIDO DESCOMENTADA.
       # HUGGING_FACE_HUB_TOKEN: "tu_token_si_es_necesario_para_modelos_privados" # Opcional
     depends_on:
       - postgres_db # Asegura que el servicio de la base de datos inicie antes que la app
@@ -35,7 +36,7 @@ services:
     #     limits:
     #       cpus: '2.0'
     #       memory: 4G
-
+    command: python -u rag.py  # Añade esta línea
   # Servicio de la base de datos PostgreSQL
   postgres_db:
     image: postgres:15 # Usa una versión específica de PostgreSQL
@@ -65,3 +66,4 @@ networks:
 # volumes:
 #   postgres_data_volume:
 #   faiss_index_volume:
+

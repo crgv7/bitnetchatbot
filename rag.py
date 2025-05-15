@@ -20,7 +20,7 @@ from langchain.prompts import PromptTemplate
 # Reemplaza '/ruta/a/tu/modelo/local.gguf' con la ruta real a tu modelo LlamaCpp
 # Esta variable DEBE ser definida por ti.
 # Ejemplo: local_model_path = "/home/user/models/llama-2-7b-chat.Q4_K_M.gguf"
-local_model_path = "/ruta/a/tu/modelo/local.gguf" # <--- !!! MODIFICA ESTA LÍNEA !!!
+local_model_path = "/app/models/gemma-3-1b-it-q4_0.gguf"
 
 if not os.path.exists(local_model_path):
     print(f"Error: El archivo del modelo no se encuentra en '{local_model_path}'.")
