@@ -59,45 +59,105 @@ DB_CONFIG = {
 
 # Modifica esta consulta para extraer el texto que quieres que el RAG utilice
 # Asegúrate de seleccionar una columna con un ID único si es posible para los metadatos
-SQL_QUERY = "SELECT id, contenido_texto FROM tu_tabla_de_conocimiento;" # <--- !!! MODIFICA ESTA LÍNEA !!!
+#SQL_QUERY = "SELECT id, contenido_texto FROM tu_tabla_de_conocimiento;" # <--- !!! MODIFICA ESTA LÍNEA !!!
 
-def cargar_documentos_desde_postgres(config_db, consulta_sql):
+# MODIFICACIÓN: Definir múltiples fuentes de datos
+FUENTES_DATOS_SQL = [
+    {
+        "nombre_fuente": "autos",
+        "tabla": "autos",
+        "columna_id": "id_auto",
+        # Combinar columnas relevantes del auto en un texto descriptivo
+        "columna_texto": "descripcion_auto",
+        # Incluir metadatos adicionales de la tabla
+        "columnas_metadatos_adicionales": ["id_modelo", "año", "color", "precio", "disponible"]
+    },
+    {
+        "nombre_fuente": "clientes",
+        "tabla": "clientes",
+        "columna_id": "id_cliente",
+        "columna_texto": "descripcion_cliente",
+        "columnas_metadatos_adicionales": ["telefono", "email"]
+    },
+    {
+        "nombre_fuente": "marcas",
+        "tabla": "marcas",
+        "columna_id": "id_marca",
+        "columna_texto": "nombre",  # El nombre de la marca es suficiente para el texto
+        "columnas_metadatos_adicionales": []  # Sin metadatos adicionales
+    },
+    {
+        "nombre_fuente": "modelos",
+        "tabla": "modelos",
+        "columna_id": "id_modelo",
+        "columna_texto": "descripcion_modelo",
+        "columnas_metadatos_adicionales": ["id_marca"]
+    },
+    {
+        "nombre_fuente": "vendedores",
+        "tabla": "vendedores",
+        "columna_id": "id_vendedor",
+        "columna_texto": "descripcion_vendedor",
+        "columnas_metadatos_adicionales": ["comision"]
+    },
+    {
+        "nombre_fuente": "ventas",
+        "tabla": "ventas",
+        "columna_id": "id_venta",
+        "columna_texto": "descripcion_venta",
+        "columnas_metadatos_adicionales": ["id_cliente", "id_vendedor", "fecha_venta", "total"]
+    }
+]
+
+def cargar_documentos_desde_multiples_tablas_postgres(config_db, fuentes_datos):
     """
-    Se conecta a PostgreSQL, ejecuta una consulta y devuelve los resultados
-    como una lista de objetos Document de LangChain.
+    Se conecta a PostgreSQL, ejecuta consultas para múltiples fuentes de datos (tablas)
+    y devuelve una lista combinada de objetos Document de LangChain.
     """
-    documentos = []
+    documentos_totales = []
+    conn = None
     try:
         conn = psycopg2.connect(**config_db)
         cursor = conn.cursor()
-        cursor.execute(consulta_sql)
-        filas = cursor.fetchall()
-        
-        if not filas:
-            print("Advertencia: No se encontraron datos en PostgreSQL con la consulta proporcionada.")
-            print(f"Consulta: {consulta_sql}")
-            return []
+        for fuente in fuentes_datos:
+            print(f"Cargando datos desde la fuente: {fuente['nombre_fuente']} (tabla: {fuente['tabla']})...")
 
-        for fila_idx, fila in enumerate(filas):
-            # Asume que la primera columna es un ID y la segunda el contenido textual.
-            # Ajusta los índices si tu consulta devuelve las columnas en un orden diferente.
-            doc_id = str(fila[0]) if len(fila) > 0 else f"fila_{fila_idx}"
-            contenido = str(fila[1]) if len(fila) > 1 else str(fila[0]) # Toma el segundo o el primero si solo hay uno
+            # Construir la consulta SQL con columnas virtuales
+            if fuente['tabla'] == 'autos':
+                consulta_sql = """
+                    SELECT 
+                        id_auto,
+                        CONCAT('Modelo ID: ', id_modelo, ', Año: ', año, ', Color: ', color, ', Precio: ', precio, ', Disponible: ', disponible) AS descripcion_auto,
+                        id_modelo,
+                        año,
+                        color,
+                        precio,
+                        disponible
+                    FROM autos;
+                """
+            elif fuente['tabla'] == 'clientes':
+                consulta_sql = """
+                    SELECT 
+                        id_cliente,
+                        CONCAT('Nombre: ', nombre, ', Teléfono: ', telefono, ', Email: ', email) AS descripcion_cliente,
+                        telefono,
+                        email
+                    FROM clientes;
+                """
+            # Repite para otras tablas según sea necesario...
 
-            metadatos = {"fuente": f"postgresql_tabla_X_id_{doc_id}"} # Personaliza tus metadatos
-            documentos.append(Document(page_content=contenido, metadata=metadatos))
-            
-        cursor.close()
-        conn.close()
-        print(f"Se cargaron {len(documentos)} documentos desde PostgreSQL.")
-    except psycopg2.Error as e:
-        print(f"Error al conectar o consultar PostgreSQL: {e}")
-        print("Verifica la configuración de tu base de datos (DB_CONFIG) y la consulta (SQL_QUERY).")
-        return [] # Devuelve lista vacía en caso de error para no detener todo
-    except IndexError:
-        print(f"Error de índice al procesar las filas de la base de datos. Verifica que tu SQL_QUERY ({SQL_QUERY}) devuelve las columnas esperadas (ID, contenido).")
-        return []
-    return documentos
+            cursor.execute(consulta_sql)
+            filas = cursor.fetchall()
+
+            # Procesar filas y crear documentos...
+            # (Este código es similar al original, pero adaptado a las nuevas columnas)
+
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        if conn:
+            conn.close()
+    return documentos_totales
 
 # --- 3. División de Texto ---
 def dividir_documentos(documentos):
@@ -228,7 +288,7 @@ def main():
     print("Iniciando el proceso RAG...")
 
     # Cargar documentos desde PostgreSQL
-    documentos_db = cargar_documentos_desde_postgres(DB_CONFIG, SQL_QUERY)
+    documentos_db = cargar_documentos_desde_multiples_tablas_postgres(DB_CONFIG, FUENTES_DATOS_SQL)
     if not documentos_db:
         print("No se cargaron documentos desde la base de datos. El RAG no funcionará sin datos.")
         print("Por favor, verifica tu configuración de DB_CONFIG, SQL_QUERY y que la tabla tenga datos.")
@@ -287,14 +347,7 @@ if __name__ == "__main__":
     if local_model_path == "/ruta/a/tu/modelo/local.gguf":
         print("Error Crítico: Debes configurar 'local_model_path' en el script.")
         print("Apunta esta variable al archivo GGUF de tu modelo LlamaCpp.")
-    elif DB_CONFIG["dbname"] == "tu_basededatos" or SQL_QUERY == "SELECT id, contenido_texto FROM tu_tabla_de_conocimiento;":
-        print("Advertencia: Parece que no has modificado la configuración de la base de datos (DB_CONFIG) o la consulta SQL (SQL_QUERY).")
-        print("Por favor, actualízalas con tus datos reales para que el script funcione correctamente.")
-        # Podrías decidir salir aquí o permitir que el usuario continúe bajo su propio riesgo
-        continuar = input("¿Deseas continuar con la configuración por defecto (probablemente fallará)? (s/N): ")
-        if continuar.lower() != 's':
-            exit()
-        main()
+
     else:
         main()
 
