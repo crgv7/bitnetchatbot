@@ -15,6 +15,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
+from langchain_community.embeddings import LlamaCppEmbeddings
 
 # --- 1. Configuración del LLM (Modelo de Lenguaje Grande) ---
 # Reemplaza '/ruta/a/tu/modelo/local.gguf' con la ruta real a tu modelo LlamaCpp
@@ -49,9 +50,9 @@ except Exception as e:
 # --- 2. Configuración y Carga de Datos desde PostgreSQL ---
 # Modifica estos detalles para que coincidan con tu configuración de PostgreSQL
 DB_CONFIG = {
-    "dbname": "tu_basededatos",    # <--- !!! MODIFICA ESTA LÍNEA !!!
-    "user": "tu_usuario",        # <--- !!! MODIFICA ESTA LÍNEA !!!
-    "password": "tu_contraseña",   # <--- !!! MODIFICA ESTA LÍNEA !!!
+    "dbname": "ragdb",    # <--- !!! MODIFICA ESTA LÍNEA !!!
+    "user": "raguser",        # <--- !!! MODIFICA ESTA LÍNEA !!!
+    "password": "ragpassword",   # <--- !!! MODIFICA ESTA LÍNEA !!!
     "host": "localhost",           # O la IP/hostname de tu servidor PostgreSQL
     "port": "5432"                 # Puerto estándar de PostgreSQL
 }
@@ -117,18 +118,28 @@ def dividir_documentos(documentos):
 # --- 4. Modelo de Embeddings ---
 # Usaremos un modelo de HuggingFace para crear los embeddings (vectores) de los textos.
 # "sentence-transformers/all-MiniLM-L6-v2" es ligero y bueno para empezar.
-# Para español, "sentence-transformers/paraphrase-multilingual-mpnet-base-v2" puede ser mejor.
-embedding_model_nombre = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-print(f"Cargando modelo de embeddings: {embedding_model_nombre}...")
+# --- 4. Modelo de Embeddings (usando LlamaCppEmbeddings para GGUF) ---
+embedding_model_gguf_path = "/app/models/nomic-embed-text-v1.5.Q3_K_S.gguf" # Ruta a tu modelo GGUF
+print(f"Cargando modelo de embeddings GGUF desde: {embedding_model_gguf_path}...")
 try:
-    embeddings = HuggingFaceEmbeddings(
-        model_name=embedding_model_nombre,
-        model_kwargs={'device': 'cpu'} # Cambia a 'cuda' si tienes GPU y PyTorch con CUDA
+    embeddings = LlamaCppEmbeddings(
+        model_path=embedding_model_gguf_path,
+        # Puedes añadir otros parámetros de LlamaCpp aquí si son necesarios
+        # y compatibles con tu modelo de embedding GGUF.
+        # Por ejemplo:
+        # n_gpu_layers=0,  # Ajusta si quieres usar GPU y tu llama.cpp build lo soporta para embeddings
+        # n_batch=512,     # Tamaño del batch para procesar embeddings (default suele ser 512)
+        # n_ctx=512,       # Contexto del modelo de embeddings (default suele ser 512)
+                           # Asegúrate de que este valor sea adecuado para el modelo Nomic.
+                           # Nomic Embed v1.5 puede manejar hasta 8192 tokens, pero para embeddings
+                           # usualmente se usan contextos más cortos. Verifica la documentación del GGUF específico.
+        verbose=False      # Puedes ponerlo en True para más detalle durante la carga/uso
     )
-    print("Modelo de embeddings cargado.")
+    print("Modelo de embeddings GGUF cargado exitosamente.")
 except Exception as e:
-    print(f"Error al cargar el modelo de embeddings: {e}")
-    print("Asegúrate de tener conexión a internet la primera vez para descargarlo, o que el nombre del modelo es correcto.")
+    print(f"Error al cargar el modelo de embeddings GGUF: {e}")
+    print(f"Asegúrate de que la ruta '{embedding_model_gguf_path}' es correcta y el archivo GGUF es válido.")
+    print("También verifica que tu build de llama-cpp-python es compatible.")
     exit()
 
 
